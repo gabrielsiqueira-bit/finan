@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card login">
+  <h2>{{ 'Entrar' if modo == 'login' else 'Criar conta' }}</h2>
+  <form method="post" class="coluna">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>E-mail
+      <input type="email" name="email" required autocomplete="username">
+    </label>
+    <label>Senha
+      <input type="password" name="senha" required minlength="{{ 8 if modo == 'cadastro' else 1 }}"
+             autocomplete="{{ 'new-password' if modo == 'cadastro' else 'current-password' }}">
+    </label>
+    {% if modo == 'cadastro' %}
+    <label>Repita a senha
+      <input type="password" name="senha2" required minlength="8" autocomplete="new-password">
+    </label>
+    <p class="muted">Mínimo de 8 caracteres.</p>
+    {% endif %}
+    <button class="btn azul" type="submit">{{ 'Entrar' if modo == 'login' else 'Criar conta' }}</button>
+  </form>
+  {% if modo == 'login' and pode_cadastrar %}
+    <p class="muted"><a href="{{ url_for('cadastro') }}">Criar conta</a></p>
+  {% elif modo == 'cadastro' %}
+    <p class="muted"><a href="{{ url_for('login') }}">Já tenho conta</a></p>
+  {% endif %}
+</div>
+{% endblock %}

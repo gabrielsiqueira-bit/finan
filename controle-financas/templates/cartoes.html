@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block content %}
+{% if not cartao %}
+<section class="card vazio-box">
+  <p>Nenhum cartão cadastrado ainda.</p>
+  <a class="btn azul" href="{{ url_for('cartoes_gerenciar') }}">Cadastrar cartão</a>
+</section>
+{% else %}
+
+<section class="card filtros">
+  <div class="linha">
+    <label>Cartão
+      <select data-nav="{{ url_for('cartoes') }}?cartao=">
+        {% for c in cartoes %}
+        <option value="{{ c.id }}" {{ 'selected' if c.id == cartao.id }}>{{ c.nome }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <form method="get" action="{{ url_for('cartoes') }}" class="linha">
+      <input type="hidden" name="cartao" value="{{ cartao.id }}">
+      <label>Fatura (mês)
+        <select name="mes">
+          {% for nome in meses %}
+          <option value="{{ loop.index }}" {{ 'selected' if loop.index == mes }}>{{ nome }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Ano <input type="number" name="ano" min="1900" max="2100" value="{{ ano }}" class="curto"></label>
+      <button class="btn azul" type="submit">Ver fatura</button>
+      <a class="btn cinza" href="{{ url_for('cartoes', cartao=cartao.id) }}">Fatura atual</a>
+      <a class="btn cinza" href="{{ url_for('cartoes_gerenciar') }}">Gerenciar cartões</a>
+    </form>
+  </div>
+</section>
+
+<section class="card resumo cinco">
+  <div><span class="rotulo">LIMITE</span><strong>{{ cartao.limite|moeda }}</strong></div>
+  <div><span class="rotulo">COMPROMETIDO</span><strong>{{ comprometido|moeda }}</strong></div>
+  <div><span class="rotulo">DISPONÍVEL</span><strong class="{{ 'verde' if disponivel >= 0 else 'vermelho' }}">{{ disponivel|moeda }}</strong></div>
+  <div><span class="rotulo">FATURA DO MÊS</span><strong class="vermelho">{{ total_fatura|moeda }}</strong></div>
+  <div><span class="rotulo">VENCIMENTO</span><strong>{{ vencimento|br }}</strong></div>
+</section>
+
+<section class="card">
+  <form method="post" action="{{ url_for('compra_adicionar') }}" class="grade-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="cartao_id" value="{{ cartao.id }}">
+    <input type="hidden" name="qs" value="{{ request.query_string.decode() }}">
+    <label>Descrição da compra<input name="descricao" required maxlength="200"></label>
+    <label>Valor total (R$)<input name="valor" required inputmode="decimal" placeholder="0,00"></label>
+    <label>Parcelas<input type="number" name="parcelas" min="1" max="60" value="1"></label>
+    <label>Data<input type="date" name="data" value="{{ hoje.isoformat() }}"></label>
+    <div class="acoes">
+      <button class="btn azul" type="submit">+ Adicionar</button>
+      <button class="btn rosa" type="submit" form="f-remover">Remover seleção</button>
+    </div>
+    <label class="check"><input type="checkbox" name="excedente" value="1"> Permitir exceder o limite</label>
+  </form>
+</section>
+
+<section class="card tabela-box">
+  <form id="f-remover" method="post" action="{{ url_for('compra_remover') }}"
+        data-confirm="Isso remove a compra INTEIRA (todas as parcelas, inclusive de outras faturas). Deseja continuar?"
+        data-exige-selecao="Selecione uma ou mais linhas da fatura para remover.">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="qs" value="{{ request.query_string.decode() }}">
+    <div class="rolagem">
+    <table>
+      <thead>
+        <tr>
+          <th class="chk"><input type="checkbox" data-select-all aria-label="Selecionar todos"></th>
+          <th>DATA DA COMPRA</th><th>DESCRIÇÃO</th><th class="centro">PARCELA</th><th class="dir">VALOR DA PARCELA</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for compra, numero, valor in itens %}
+        <tr>
+          <td class="chk"><input type="checkbox" name="ids" value="{{ compra.id }}"></td>
+          <td>{{ compra.data|br }}</td>
+          <td>{{ compra.descricao }}</td>
+          <td class="centro">{{ numero }}/{{ compra.parcelas }}</td>
+          <td class="dir">{{ valor|moeda }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="vazio">Nenhuma parcela nesta fatura.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </form>
+</section>
+{% endif %}
+{% endblock %}
