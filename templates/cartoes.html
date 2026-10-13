@@ -1,13 +1,35 @@
 {% extends "base.html" %}
+{% from "_macros.html" import ico %}
+{% block title %}Cartões{% endblock %}
+{% block titulo %}Cartões{% endblock %}
+{% block subtitulo %}
+  {% if cartao %}{{ cartao.nome }}: fatura de {{ meses[mes - 1] }}/{{ ano }}{% else %}Faturas, parcelas e limite{% endif %}
+{% endblock %}
+{% block acoes_pagina %}
+  <a class="btn btn-secundario" href="{{ url_for('cartoes_gerenciar') }}">{{ ico('settings') }}Gerenciar cartões</a>
+{% endblock %}
+
 {% block content %}
 {% if not cartao %}
-<section class="card vazio-box">
-  <p>Nenhum cartão cadastrado ainda.</p>
-  <a class="btn azul" href="{{ url_for('cartoes_gerenciar') }}">Cadastrar cartão</a>
+<section class="card">
+  <div class="vazio">
+    {{ ico('card', 'ico-grande') }}
+    <strong>Nenhum cartão cadastrado ainda</strong>
+    <span>Cadastre seu primeiro cartão para acompanhar faturas, parcelas e limite.</span>
+    <a class="btn btn-primario" href="{{ url_for('cartoes_gerenciar') }}">{{ ico('plus') }}Cadastrar cartão</a>
+  </div>
 </section>
 {% else %}
 
-<section class="card filtros">
+{% if cartao.limite > 0 %}
+  {% set pct = (comprometido / cartao.limite * 100)|round|int %}
+{% else %}
+  {% set pct = 0 %}
+{% endif %}
+{% set pct = 0 if pct < 0 else pct %}
+{% set barra = 'ok' if pct <= 70 else ('atencao' if pct <= 100 else 'estourou') %}
+
+<section class="card card-filtros">
   <div class="linha">
     <label>Cartão
       <select data-nav="{{ url_for('cartoes') }}?cartao=">
@@ -26,65 +48,125 @@
         </select>
       </label>
       <label>Ano <input type="number" name="ano" min="1900" max="2100" value="{{ ano }}" class="curto"></label>
-      <button class="btn azul" type="submit">Ver fatura</button>
-      <a class="btn cinza" href="{{ url_for('cartoes', cartao=cartao.id) }}">Fatura atual</a>
-      <a class="btn cinza" href="{{ url_for('cartoes_gerenciar') }}">Gerenciar cartões</a>
+      <button class="btn btn-secundario" type="submit">Ver fatura</button>
+      <a class="btn btn-fantasma" href="{{ url_for('cartoes', cartao=cartao.id) }}">Fatura atual</a>
     </form>
   </div>
 </section>
 
-<section class="card resumo cinco">
-  <div><span class="rotulo">LIMITE</span><strong>{{ cartao.limite|moeda }}</strong></div>
-  <div><span class="rotulo">COMPROMETIDO</span><strong>{{ comprometido|moeda }}</strong></div>
-  <div><span class="rotulo">DISPONÍVEL</span><strong class="{{ 'verde' if disponivel >= 0 else 'vermelho' }}">{{ disponivel|moeda }}</strong></div>
-  <div><span class="rotulo">FATURA DO MÊS</span><strong class="vermelho">{{ total_fatura|moeda }}</strong></div>
-  <div><span class="rotulo">VENCIMENTO</span><strong>{{ vencimento|br }}</strong></div>
+<section class="cartao-grade">
+  <article class="cartao-visual" aria-label="Cartão {{ cartao.nome }}">
+    <div class="cartao-topo">
+      <span class="cartao-nome">{{ cartao.nome }}</span>
+      <span class="cartao-chip" aria-hidden="true"></span>
+    </div>
+    <div>
+      <span class="cartao-rotulo">Limite total</span>
+      <strong class="cartao-limite num">{{ cartao.limite|moeda }}</strong>
+    </div>
+    <div class="cartao-datas">
+      <span><span class="cartao-rotulo">Fecha</span>dia {{ cartao.fechamento }}</span>
+      <span><span class="cartao-rotulo">Vence</span>dia {{ cartao.vencimento }}</span>
+    </div>
+  </article>
+
+  <div class="card painel-limite">
+    <div class="painel-linha">
+      <h2 class="card-titulo sem-margem">Uso do limite</h2>
+      <span class="pill {{ 'pill-ok' if barra == 'ok' else ('pill-atencao' if barra == 'atencao' else 'pill-perigo') }}">{{ pct }}% comprometido</span>
+    </div>
+    <progress class="barra {{ barra }}" max="100" value="{{ [pct, 100]|min }}" aria-label="Limite comprometido"></progress>
+
+    <dl class="dados">
+      <div>
+        <dt>Comprometido</dt>
+        <dd class="num">{{ comprometido|moeda }}</dd>
+      </div>
+      <div>
+        <dt>Disponível</dt>
+        <dd class="num {{ 'positivo' if disponivel >= 0 else 'negativo' }}">{{ disponivel|moeda }}</dd>
+      </div>
+      <div>
+        <dt>Fatura de {{ meses[mes - 1] }}</dt>
+        <dd class="num negativo">{{ total_fatura|moeda }}</dd>
+      </div>
+      <div>
+        <dt>Vencimento da fatura</dt>
+        <dd class="num">{{ vencimento|br }}</dd>
+      </div>
+    </dl>
+  </div>
 </section>
 
 <section class="card">
-  <form method="post" action="{{ url_for('compra_adicionar') }}" class="grade-form">
+  <h2 class="card-titulo">Nova compra</h2>
+  <form method="post" action="{{ url_for('compra_adicionar') }}" class="form-grade fg-compra">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="cartao_id" value="{{ cartao.id }}">
     <input type="hidden" name="qs" value="{{ request.query_string.decode() }}">
-    <label>Descrição da compra<input name="descricao" required maxlength="200"></label>
+    <label class="largo">Descrição da compra<input name="descricao" required maxlength="200" placeholder="Ex.: Notebook"></label>
     <label>Valor total (R$)<input name="valor" required inputmode="decimal" placeholder="0,00"></label>
     <label>Parcelas<input type="number" name="parcelas" min="1" max="60" value="1"></label>
-    <label>Data<input type="date" name="data" value="{{ hoje.isoformat() }}"></label>
-    <div class="acoes">
-      <button class="btn azul" type="submit">+ Adicionar</button>
-      <button class="btn rosa" type="submit" form="f-remover">Remover seleção</button>
+    <label>Data da compra<input type="date" name="data" value="{{ hoje.isoformat() }}"></label>
+    <label class="check"><input type="checkbox" name="excedente" value="1"> Permitir exceder o limite do cartão</label>
+    <div class="form-acoes">
+      <button class="btn btn-primario" type="submit">{{ ico('plus') }}Adicionar compra</button>
     </div>
-    <label class="check"><input type="checkbox" name="excedente" value="1"> Permitir exceder o limite</label>
   </form>
 </section>
 
-<section class="card tabela-box">
+<section class="card tabela-card">
+  <div class="tabela-topo">
+    <div>
+      <h2 class="card-titulo sem-margem">Fatura de {{ meses[mes - 1] }}/{{ ano }}</h2>
+      <span class="legenda">{{ itens|length }} parcela{{ 's' if itens|length != 1 }} nesta fatura</span>
+    </div>
+    <div class="tabela-topo-acoes">
+      <span class="selecao" data-sel-count hidden></span>
+      <button class="btn btn-perigo" type="submit" form="f-remover">{{ ico('trash') }}Remover selecionadas</button>
+    </div>
+  </div>
+
   <form id="f-remover" method="post" action="{{ url_for('compra_remover') }}"
         data-confirm="Isso remove a compra INTEIRA (todas as parcelas, inclusive de outras faturas). Deseja continuar?"
         data-exige-selecao="Selecione uma ou mais linhas da fatura para remover.">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="qs" value="{{ request.query_string.decode() }}">
     <div class="rolagem">
-    <table>
+    <table class="tabela empilhar">
       <thead>
         <tr>
-          <th class="chk"><input type="checkbox" data-select-all aria-label="Selecionar todos"></th>
-          <th>DATA DA COMPRA</th><th>DESCRIÇÃO</th><th class="centro">PARCELA</th><th class="dir">VALOR DA PARCELA</th>
+          <th class="chk"><input type="checkbox" data-select-all aria-label="Selecionar todas"></th>
+          <th>Data da compra</th><th>Descrição</th><th class="centro">Parcela</th><th class="dir">Valor da parcela</th>
         </tr>
       </thead>
       <tbody>
         {% for compra, numero, valor in itens %}
         <tr>
-          <td class="chk"><input type="checkbox" name="ids" value="{{ compra.id }}"></td>
-          <td>{{ compra.data|br }}</td>
-          <td>{{ compra.descricao }}</td>
-          <td class="centro">{{ numero }}/{{ compra.parcelas }}</td>
-          <td class="dir">{{ valor|moeda }}</td>
+          <td class="chk"><input type="checkbox" name="ids" value="{{ compra.id }}" aria-label="Selecionar compra"></td>
+          <td data-label="Data da compra" class="data">{{ compra.data|br }}</td>
+          <td data-label="Descrição" class="desc-forte">{{ compra.descricao }}</td>
+          <td data-label="Parcela" class="centro"><span class="pill">{{ numero }}/{{ compra.parcelas }}</span></td>
+          <td data-label="Valor da parcela" class="dir num valor">{{ valor|moeda }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="vazio">Nenhuma parcela nesta fatura.</td></tr>
+        <tr class="linha-vazia"><td colspan="5">
+          <div class="vazio">
+            {{ ico('inbox', 'ico-grande') }}
+            <strong>Nenhuma parcela nesta fatura</strong>
+            <span>Escolha outro mês ou adicione uma compra acima.</span>
+          </div>
+        </td></tr>
         {% endfor %}
       </tbody>
+      {% if itens %}
+      <tfoot>
+        <tr>
+          <td colspan="4" class="dir total-rotulo">Total da fatura</td>
+          <td class="dir num valor total-valor" data-label="Total da fatura">{{ total_fatura|moeda }}</td>
+        </tr>
+      </tfoot>
+      {% endif %}
     </table>
     </div>
   </form>
