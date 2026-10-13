@@ -1,44 +1,62 @@
 <!doctype html>
+{% from "_macros.html" import ico, sprite, avisos %}
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Finanças | Controle de Renda e Gastos</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>{% block title %}Finanças{% endblock %} | Controle de renda e gastos</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=2">
+  <script src="{{ url_for('static', filename='app.js') }}?v=2" defer></script>
 </head>
-<body>
-<div class="container">
-  <header class="topo">
-    <div class="titulo">
-      <h1>Controle de renda e gastos do Gabriel</h1>
-      <span class="selo">FINANÇAS PESSOAIS</span>
-    </div>
-    {% if session.uid %}
-    <form method="post" action="{{ url_for('sair') }}" class="sair">
+<body class="{% block bodyclass %}{% endblock %}">
+{{ sprite() }}
+{% block body %}
+<div class="app">
+  <aside class="sidebar">
+    <a class="marca" href="{{ url_for('inicio') }}">
+      <span class="marca-logo">{{ ico('logo') }}</span>
+      <span class="marca-nome">Finanças</span>
+    </a>
+
+    {% set fp = filtro.params if filtro is defined else {} %}
+    <nav class="menu" aria-label="Seções">
+      <a class="menu-item {{ 'ativo' if aba == 'rendas' }}" href="{{ url_for('rendas', **fp) }}"
+         {% if aba == 'rendas' %}aria-current="page"{% endif %}>
+        {{ ico('up') }}<span>Rendas</span>
+      </a>
+      <a class="menu-item {{ 'ativo' if aba == 'gastos' }}" href="{{ url_for('gastos', **fp) }}"
+         {% if aba == 'gastos' %}aria-current="page"{% endif %}>
+        {{ ico('down') }}<span>Gastos</span>
+      </a>
+      <a class="menu-item {{ 'ativo' if aba == 'cartoes' }}" href="{{ url_for('cartoes') }}"
+         {% if aba == 'cartoes' %}aria-current="page"{% endif %}>
+        {{ ico('card') }}<span>Cartões</span>
+      </a>
+    </nav>
+
+    <form method="post" action="{{ url_for('sair') }}" class="usuario">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <span class="muted">{{ session.email }}</span>
-      <button class="btn cinza" type="submit">Sair</button>
+      <span class="avatar" aria-hidden="true">{{ session.email[:1]|upper }}</span>
+      <span class="usuario-email" title="{{ session.email }}">{{ session.email }}</span>
+      <button class="btn-icone" type="submit" title="Sair" aria-label="Sair da conta">{{ ico('out') }}</button>
     </form>
-    {% endif %}
-  </header>
+  </aside>
 
-  {% if session.uid %}
-  {% set fp = filtro.params if filtro is defined else {} %}
-  <nav class="abas">
-    <a class="aba {{ 'ativa' if aba == 'rendas' }}" href="{{ url_for('rendas', **fp) }}">Rendas</a>
-    <a class="aba {{ 'ativa' if aba == 'gastos' }}" href="{{ url_for('gastos', **fp) }}">Gastos</a>
-    <a class="aba {{ 'ativa' if aba == 'cartoes' }}" href="{{ url_for('cartoes') }}">Cartões</a>
-  </nav>
-  {% endif %}
+  <main class="principal">
+    <header class="pagina-topo">
+      <div>
+        <h1>{% block titulo %}{% endblock %}</h1>
+        <p class="subtitulo">{% block subtitulo %}{% endblock %}</p>
+      </div>
+      <div class="pagina-acoes">{% block acoes_pagina %}{% endblock %}</div>
+    </header>
 
-  {% with mensagens = get_flashed_messages(with_categories=true) %}
-    {% for categoria, msg in mensagens %}
-      <div class="aviso {{ categoria }}">{{ msg }}</div>
-    {% endfor %}
-  {% endwith %}
+    {{ avisos() }}
 
-  {% block content %}{% endblock %}
+    {% block content %}{% endblock %}
+  </main>
 </div>
+{% endblock %}
 </body>
 </html>
