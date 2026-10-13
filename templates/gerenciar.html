@@ -1,44 +1,68 @@
 {% extends "base.html" %}
+{% from "_macros.html" import ico %}
+{% block title %}Gerenciar cartões{% endblock %}
+{% block titulo %}Gerenciar cartões{% endblock %}
+{% block subtitulo %}Cadastre novos cartões ou remova os que não usa mais.{% endblock %}
+{% block acoes_pagina %}
+  <a class="btn btn-secundario" href="{{ url_for('cartoes') }}">{{ ico('back') }}Voltar para faturas</a>
+{% endblock %}
+
 {% block content %}
 <section class="card">
-  <form method="post" action="{{ url_for('cartao_novo') }}" class="grade-form">
+  <h2 class="card-titulo">Novo cartão</h2>
+  <form method="post" action="{{ url_for('cartao_novo') }}" class="form-grade fg-cartao">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label>Nome do cartão<input name="nome" required maxlength="60"></label>
+    <label class="largo">Nome do cartão<input name="nome" required maxlength="60" placeholder="Ex.: Nubank"></label>
     <label>Limite (R$)<input name="limite" required inputmode="decimal" placeholder="0,00"></label>
     <label>Dia de fechamento<input type="number" name="fechamento" min="1" max="31" required></label>
     <label>Dia de vencimento<input type="number" name="vencimento" min="1" max="31" required></label>
-    <div class="acoes">
-      <button class="btn azul" type="submit">+ Adicionar cartão</button>
-      <button class="btn rosa" type="submit" form="f-remover">Remover seleção</button>
-      <a class="btn cinza" href="{{ url_for('cartoes') }}">Voltar</a>
+    <div class="form-acoes">
+      <button class="btn btn-primario" type="submit">{{ ico('plus') }}Adicionar cartão</button>
     </div>
   </form>
 </section>
 
-<section class="card tabela-box">
+<section class="card tabela-card">
+  <div class="tabela-topo">
+    <div>
+      <h2 class="card-titulo sem-margem">Seus cartões</h2>
+      <span class="legenda">{{ cartoes|length }} cadastrado{{ 's' if cartoes|length != 1 }}</span>
+    </div>
+    <div class="tabela-topo-acoes">
+      <span class="selecao" data-sel-count hidden></span>
+      <button class="btn btn-perigo" type="submit" form="f-remover">{{ ico('trash') }}Remover selecionados</button>
+    </div>
+  </div>
+
   <form id="f-remover" method="post" action="{{ url_for('cartao_remover') }}"
         data-confirm="Remover o cartão também apaga TODAS as compras dele. Deseja continuar?"
         data-exige-selecao="Selecione um ou mais cartões para remover.">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="rolagem">
-    <table>
+    <table class="tabela empilhar">
       <thead>
         <tr>
           <th class="chk"><input type="checkbox" data-select-all aria-label="Selecionar todos"></th>
-          <th>CARTÃO</th><th class="dir">LIMITE</th><th class="centro">FECHAMENTO</th><th class="centro">VENCIMENTO</th>
+          <th>Cartão</th><th class="dir">Limite</th><th class="centro">Fechamento</th><th class="centro">Vencimento</th>
         </tr>
       </thead>
       <tbody>
         {% for c in cartoes %}
         <tr>
-          <td class="chk"><input type="checkbox" name="ids" value="{{ c.id }}"></td>
-          <td>{{ c.nome }}</td>
-          <td class="dir">{{ c.limite|moeda }}</td>
-          <td class="centro">dia {{ c.fechamento }}</td>
-          <td class="centro">dia {{ c.vencimento }}</td>
+          <td class="chk"><input type="checkbox" name="ids" value="{{ c.id }}" aria-label="Selecionar cartão"></td>
+          <td data-label="Cartão" class="desc-forte">{{ c.nome }}</td>
+          <td data-label="Limite" class="dir num valor">{{ c.limite|moeda }}</td>
+          <td data-label="Fechamento" class="centro">dia {{ c.fechamento }}</td>
+          <td data-label="Vencimento" class="centro">dia {{ c.vencimento }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="vazio">Nenhum cartão cadastrado.</td></tr>
+        <tr class="linha-vazia"><td colspan="5">
+          <div class="vazio">
+            {{ ico('card', 'ico-grande') }}
+            <strong>Nenhum cartão cadastrado</strong>
+            <span>Preencha o formulário acima para adicionar o primeiro.</span>
+          </div>
+        </td></tr>
         {% endfor %}
       </tbody>
     </table>
