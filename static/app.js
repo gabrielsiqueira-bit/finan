@@ -11,6 +11,15 @@ document.addEventListener("submit", function (e) {
   if (msg && !confirm(msg)) e.preventDefault();
 });
 
+// Mostra "N selecionados" ao lado do botão de remover.
+function atualizarSelecao() {
+  var n = document.querySelectorAll('input[name="ids"]:checked').length;
+  document.querySelectorAll("[data-sel-count]").forEach(function (el) {
+    el.textContent = n + (n === 1 ? " selecionado" : " selecionados");
+    el.hidden = n === 0;
+  });
+}
+
 document.addEventListener("change", function (e) {
   var el = e.target;
   if (el.dataset.nav) {
@@ -21,5 +30,17 @@ document.addEventListener("change", function (e) {
     form.querySelectorAll('input[name="ids"]').forEach(function (c) {
       c.checked = el.checked;
     });
+  }
+  if (el.name === "ids" || el.hasAttribute("data-select-all")) {
+    atualizarSelecao();
+  }
+});
+
+// Fechar avisos (flash).
+document.addEventListener("click", function (e) {
+  var botao = e.target.closest("[data-dismiss]");
+  if (botao) {
+    var aviso = botao.closest(".aviso");
+    if (aviso) aviso.remove();
   }
 });
