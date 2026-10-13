@@ -1,28 +1,60 @@
 {% extends "base.html" %}
-{% block content %}
-<div class="card login">
-  <h2>{{ 'Entrar' if modo == 'login' else 'Criar conta' }}</h2>
-  <form method="post" class="coluna">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label>E-mail
-      <input type="email" name="email" required autocomplete="username">
-    </label>
-    <label>Senha
-      <input type="password" name="senha" required minlength="{{ 8 if modo == 'cadastro' else 1 }}"
-             autocomplete="{{ 'new-password' if modo == 'cadastro' else 'current-password' }}">
-    </label>
-    {% if modo == 'cadastro' %}
-    <label>Repita a senha
-      <input type="password" name="senha2" required minlength="8" autocomplete="new-password">
-    </label>
-    <p class="muted">Mínimo de 8 caracteres.</p>
-    {% endif %}
-    <button class="btn azul" type="submit">{{ 'Entrar' if modo == 'login' else 'Criar conta' }}</button>
-  </form>
-  {% if modo == 'login' and pode_cadastrar %}
-    <p class="muted"><a href="{{ url_for('cadastro') }}">Criar conta</a></p>
-  {% elif modo == 'cadastro' %}
-    <p class="muted"><a href="{{ url_for('login') }}">Já tenho conta</a></p>
-  {% endif %}
+{% from "_macros.html" import ico, avisos %}
+{% block title %}{{ 'Entrar' if modo == 'login' else 'Criar conta' }}{% endblock %}
+{% block bodyclass %}pagina-auth{% endblock %}
+
+{% block body %}
+<div class="auth">
+  <section class="auth-destaque">
+    <a class="marca marca-clara" href="{{ url_for('login') }}">
+      <span class="marca-logo">{{ ico('logo') }}</span>
+      <span class="marca-nome">Finanças</span>
+    </a>
+    <div class="auth-texto">
+      <h2>Sua renda, seus gastos e seus cartões no mesmo lugar.</h2>
+      <ul class="auth-lista">
+        <li>{{ ico('up') }}<span>Registre rendas e gastos e filtre por período ou por mês.</span></li>
+        <li>{{ ico('card') }}<span>Acompanhe faturas, parcelas e o limite disponível de cada cartão.</span></li>
+        <li>{{ ico('shield') }}<span>Cada conta enxerga apenas os próprios dados.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="auth-painel">
+    <div class="auth-caixa">
+      <h1>{{ 'Entrar na sua conta' if modo == 'login' else 'Criar sua conta' }}</h1>
+      <p class="subtitulo">
+        {{ 'Use seu e-mail e senha para continuar.' if modo == 'login' else 'Informe um e-mail e escolha uma senha.' }}
+      </p>
+
+      {{ avisos() }}
+
+      <form method="post" class="form-coluna">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label>E-mail
+          <input type="email" name="email" required autocomplete="username" autofocus>
+        </label>
+        <label>Senha
+          <input type="password" name="senha" required minlength="{{ 8 if modo == 'cadastro' else 1 }}"
+                 autocomplete="{{ 'new-password' if modo == 'cadastro' else 'current-password' }}">
+        </label>
+        {% if modo == 'cadastro' %}
+        <label>Repita a senha
+          <input type="password" name="senha2" required minlength="8" autocomplete="new-password">
+          <span class="dica">Mínimo de 8 caracteres.</span>
+        </label>
+        {% endif %}
+        <button class="btn btn-primario btn-bloco" type="submit">
+          {{ 'Entrar' if modo == 'login' else 'Criar conta' }}
+        </button>
+      </form>
+
+      {% if modo == 'login' and pode_cadastrar %}
+        <p class="auth-rodape">Ainda não tem conta? <a href="{{ url_for('cadastro') }}">Criar conta</a></p>
+      {% elif modo == 'cadastro' %}
+        <p class="auth-rodape">Já tem conta? <a href="{{ url_for('login') }}">Entrar</a></p>
+      {% endif %}
+    </div>
+  </section>
 </div>
 {% endblock %}
