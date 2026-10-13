@@ -1,41 +1,65 @@
 {% extends "base.html" %}
+{% from "_macros.html" import ico %}
+{% block title %}{{ cfg.titulo }}{% endblock %}
+{% block titulo %}{{ cfg.titulo }}{% endblock %}
+{% block subtitulo %}{{ filtro.descricao }}{% endblock %}
+
 {% block content %}
 {% set saldo = total_rendas - total_gastos %}
+{% if total_rendas > 0 %}
+  {% set pct = (total_gastos / total_rendas * 100)|round|int %}
+{% else %}
+  {% set pct = 100 if total_gastos > 0 else 0 %}
+{% endif %}
+{% set barra = 'ok' if pct <= 70 else ('atencao' if pct <= 100 else 'estourou') %}
+{% set n = n_rendas if endpoint == 'rendas' else n_gastos %}
 
-<section class="card resumo">
-  <div><span class="rotulo">TOTAL DE RENDAS</span><strong class="verde">{{ total_rendas|moeda }}</strong></div>
-  <div><span class="rotulo">TOTAL DE GASTOS</span><strong class="vermelho">{{ total_gastos|moeda }}</strong></div>
-  <div><span class="rotulo">SALDO</span><strong class="{{ 'verde' if saldo >= 0 else 'vermelho' }}">{{ saldo|moeda }}</strong></div>
-</section>
+<section class="resumo card" aria-label="Resumo do período">
+  <div class="resumo-saldo">
+    <span class="rotulo">Saldo</span>
+    <strong class="saldo num {{ 'positivo' if saldo >= 0 else 'negativo' }}">{{ saldo|moeda }}</strong>
+    <progress class="barra {{ barra }}" max="100" value="{{ [pct, 100]|min }}"
+              aria-label="Gastos em relação às rendas"></progress>
+    <span class="legenda">
+      {% if total_rendas > 0 %}
+        Os gastos equivalem a {{ pct }}% das rendas.
+      {% elif total_gastos > 0 %}
+        Há gastos neste período e nenhuma renda registrada.
+      {% else %}
+        Nenhum lançamento neste período.
+      {% endif %}
+    </span>
+  </div>
 
-<section class="card filtros">
-  <form method="get" action="{{ url_for(endpoint) }}" class="linha">
-    <label>De <input type="date" name="de" value="{{ filtro.de.isoformat() if filtro.de and 'de' in filtro.params }}"></label>
-    <label>Até <input type="date" name="ate" value="{{ filtro.ate.isoformat() if filtro.ate and 'ate' in filtro.params }}"></label>
-    <button class="btn azul" type="submit">Filtrar período</button>
-  </form>
-  <form method="get" action="{{ url_for(endpoint) }}" class="linha">
-    <label>Mês
-      <select name="mes">
-        {% for nome in meses %}
-        <option value="{{ loop.index }}" {{ 'selected' if loop.index == filtro.mes }}>{{ nome }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>Ano <input type="number" name="ano" min="1900" max="2100" value="{{ filtro.ano }}" class="curto"></label>
-    <button class="btn azul" type="submit">Filtrar mês</button>
-    <a class="btn cinza" href="{{ url_for(endpoint, mes=hoje.month, ano=hoje.year) }}">Mês atual</a>
-    <a class="btn cinza" href="{{ url_for(endpoint) }}">Limpar filtro</a>
-  </form>
-  <p class="info">{{ filtro.descricao }} &bull; {{ n_rendas }} renda(s) &bull; {{ n_gastos }} gasto(s)</p>
+  <div class="resumo-lados">
+    <div class="resumo-item">
+      <span class="selo-ico positivo-bg">{{ ico('up') }}</span>
+      <div>
+        <span class="rotulo">Rendas</span>
+        <strong class="num positivo">{{ total_rendas|moeda }}</strong>
+        <span class="legenda">{{ n_rendas }} lançamento{{ 's' if n_rendas != 1 }}</span>
+      </div>
+    </div>
+    <div class="resumo-item">
+      <span class="selo-ico negativo-bg">{{ ico('down') }}</span>
+      <div>
+        <span class="rotulo">Gastos</span>
+        <strong class="num negativo">{{ total_gastos|moeda }}</strong>
+        <span class="legenda">{{ n_gastos }} lançamento{{ 's' if n_gastos != 1 }}</span>
+      </div>
+    </div>
+  </div>
 </section>
 
 <section class="card">
-  <form method="post" action="{{ url_for(endpoint) }}" class="grade-form">
+  <h2 class="card-titulo">{{ 'Nova renda' if endpoint == 'rendas' else 'Novo gasto' }}</h2>
+  <form method="post" action="{{ url_for(endpoint) }}" class="form-grade fg-lanc">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="qs" value="{{ request.query_string.decode() }}">
     <label>{{ cfg.rotulo }}
-      <input name="{{ cfg.campo }}" required maxlength="80" {% if endpoint == 'gastos' %}list="categorias"{% endif %}>
+      <input name="{{ cfg.campo }}" required maxlength="80"
+             placeholder="{{ 'Ex.: Salário' if endpoint == 'rendas' else 'Ex.: Mercado' }}"
+             {% if endpoint == 'gastos' %}list="categorias" autocomplete="off"{% endif %}>
     </label>
     {% if endpoint == 'gastos' %}
     <datalist id="categorias">
@@ -44,39 +68,95 @@
     {% endif %}
     <label>Valor (R$)<input name="valor" required inputmode="decimal" placeholder="0,00"></label>
     <label>Data<input type="date" name="data" value="{{ hoje.isoformat() }}"></label>
-    <label>Descrição (opcional)<input name="descricao" maxlength="200"></label>
-    <div class="acoes">
-      <button class="btn {{ 'azul' if endpoint == 'rendas' else 'vermelho-bg' }}" type="submit">+ Adicionar</button>
-      <button class="btn rosa" type="submit" form="f-remover">Remover seleção</button>
+    <label class="largo"><span>Descrição <span class="opcional">(opcional)</span></span>
+      <input name="descricao" maxlength="200">
+    </label>
+    <div class="form-acoes">
+      <button class="btn btn-primario" type="submit">
+        {{ ico('plus') }}{{ 'Adicionar renda' if endpoint == 'rendas' else 'Adicionar gasto' }}
+      </button>
     </div>
   </form>
 </section>
 
-<section class="card tabela-box">
+<section class="card card-filtros">
+  <h2 class="card-titulo">Filtrar registros</h2>
+  <div class="filtros-grade">
+    <form method="get" action="{{ url_for(endpoint) }}" class="filtro-grupo">
+      <span class="filtro-nome">Por período</span>
+      <div class="linha">
+        <label>De <input type="date" name="de" value="{{ filtro.de.isoformat() if filtro.de and 'de' in filtro.params }}"></label>
+        <label>Até <input type="date" name="ate" value="{{ filtro.ate.isoformat() if filtro.ate and 'ate' in filtro.params }}"></label>
+        <button class="btn btn-secundario" type="submit">Aplicar</button>
+      </div>
+    </form>
+
+    <form method="get" action="{{ url_for(endpoint) }}" class="filtro-grupo">
+      <span class="filtro-nome">Por mês</span>
+      <div class="linha">
+        <label>Mês
+          <select name="mes">
+            {% for nome in meses %}
+            <option value="{{ loop.index }}" {{ 'selected' if loop.index == filtro.mes }}>{{ nome }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Ano <input type="number" name="ano" min="1900" max="2100" value="{{ filtro.ano }}" class="curto"></label>
+        <button class="btn btn-secundario" type="submit">Aplicar</button>
+      </div>
+    </form>
+  </div>
+  <div class="filtro-rodape">
+    <a class="link-discreto" href="{{ url_for(endpoint, mes=hoje.month, ano=hoje.year) }}">Ir para o mês atual</a>
+    <a class="link-discreto" href="{{ url_for(endpoint) }}">Limpar filtro</a>
+  </div>
+</section>
+
+<section class="card tabela-card">
+  <div class="tabela-topo">
+    <div>
+      <h2 class="card-titulo sem-margem">Registros</h2>
+      <span class="legenda">{{ n }} no período</span>
+    </div>
+    <div class="tabela-topo-acoes">
+      <span class="selecao" data-sel-count hidden></span>
+      <button class="btn btn-perigo" type="submit" form="f-remover">{{ ico('trash') }}Remover selecionados</button>
+    </div>
+  </div>
+
   <form id="f-remover" method="post" action="{{ url_for(endpoint + '_remover') }}"
         data-confirm="Deseja remover os registros selecionados?"
         data-exige-selecao="Selecione um ou mais registros para remover.">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="qs" value="{{ request.query_string.decode() }}">
     <div class="rolagem">
-    <table>
+    <table class="tabela empilhar">
       <thead>
         <tr>
           <th class="chk"><input type="checkbox" data-select-all aria-label="Selecionar todos"></th>
-          <th>DATA</th><th>{{ cfg.coluna }}</th><th class="dir">VALOR</th><th>DESCRIÇÃO</th>
+          <th>Data</th><th>{{ cfg.coluna|capitalize }}</th><th class="dir">Valor</th><th>Descrição</th>
         </tr>
       </thead>
       <tbody>
         {% for r in registros %}
         <tr>
-          <td class="chk"><input type="checkbox" name="ids" value="{{ r.id }}"></td>
-          <td>{{ r.data|br }}</td>
-          <td>{{ r[cfg.campo] }}</td>
-          <td class="dir">{{ r.valor|moeda }}</td>
-          <td>{{ r.descricao or '-' }}</td>
+          <td class="chk"><input type="checkbox" name="ids" value="{{ r.id }}" aria-label="Selecionar registro"></td>
+          <td data-label="Data" class="data">{{ r.data|br }}</td>
+          <td data-label="{{ cfg.coluna|capitalize }}"><span class="pill">{{ r[cfg.campo] }}</span></td>
+          <td data-label="Valor" class="dir num valor {{ 'positivo' if endpoint == 'rendas' else 'negativo' }}">
+            {{ '+' if endpoint == 'rendas' else '−' }} {{ r.valor|moeda }}
+          </td>
+          <td data-label="Descrição" class="desc">{{ r.descricao or '-' }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="vazio">Nenhum registro neste período.</td></tr>
+        <tr class="linha-vazia"><td colspan="5">
+          <div class="vazio">
+            {{ ico('inbox', 'ico-grande') }}
+            <strong>Nenhum registro neste período</strong>
+            <span>Use o formulário acima para adicionar {{ 'uma renda' if endpoint == 'rendas' else 'um gasto' }}
+              ou escolha outro período no filtro.</span>
+          </div>
+        </td></tr>
         {% endfor %}
       </tbody>
     </table>
