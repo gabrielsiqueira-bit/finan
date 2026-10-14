@@ -79,6 +79,7 @@ def formatar_data(d):
 
 app.jinja_env.filters["moeda"] = formatar_moeda
 app.jinja_env.filters["br"] = formatar_data
+app.jinja_env.filters["valor_campo"] = lambda v: f"{v:.2f}".replace(".", ",")
 
 
 def converter_valor(texto):
@@ -113,13 +114,13 @@ def ok(msg):
     flash(msg, "ok")
 
 
-def voltar(endpoint, **extra):
+def voltar(endpoint, url_args=None, **extra):
     """Redireciona de volta mantendo só parâmetros de filtro conhecidos."""
     permitidos = {"de", "ate", "mes", "ano", "cartao"}
     params = {k: v for k, v in parse_qsl(request.form.get("qs", ""))
               if k in permitidos}
     params.update(extra)
-    url = url_for(endpoint)
+    url = url_for(endpoint, **(url_args or {}))
     return redirect(url + ("?" + urlencode(params) if params else ""))
 
 
@@ -212,7 +213,7 @@ def login():
             session.permanent = True
             session["uid"] = usuario["id"]
             session["email"] = usuario["email"]
-            return redirect(url_for("rendas"))
+            return redirect(url_for("inicio"))
         registrar_falha()
         erro("E-mail ou senha incorretos.")
     return render_template("auth.html", modo="login",
@@ -244,7 +245,7 @@ def cadastro():
                     session.permanent = True
                     session["uid"] = uid
                     session["email"] = email
-                    return redirect(url_for("rendas"))
+                    return redirect(url_for("inicio"))
     return render_template("auth.html", modo="cadastro", pode_cadastrar=True)
 
 
@@ -254,10 +255,125 @@ def sair():
     return redirect(url_for("login"))
 
 
+# -----------------------------
+# VISAO GERAL
+# -----------------------------
+
+def variacao(atual, anterior):
+    """Variação percentual (inteira) ou None se não há base de comparação."""
+    if anterior <= 0:
+        return None
+    return round((atual - anterior) / anterior * 100)
+
+
+def montar_grafico(meses_serie, por_mes, ano, mes):
+    """Coordenadas do gráfico de barras (rendas x gastos), para o SVG."""
+    largura, base_y, altura = 640, 204, 176
+    maior = max([1.0] + [v for m in meses_serie
+                         for v in (por_mes[m]["rendas"], por_mes[m]["gastos"])])
+    grupo = largura / len(meses_serie)
+    larg_barra, folga = 32, 6
+    inicio_x = (grupo - (2 * larg_barra + folga)) / 2
+
+    def barra(valor, x):
+        h = 0 if valor <= 0 else max(valor / maior * altura, 3)
+        return {"x": round(x, 1), "y": round(base_y - h, 1),
+                "h": round(h, 1), "w": larg_barra, "valor": round(valor, 2)}
+
+    grupos = []
+    for i, m in enumerate(meses_serie):
+        x0 = i * grupo + inicio_x
+        grupos.append({
+            "rotulo": MESES[m[1] - 1][:3],
+            "centro": round(i * grupo + grupo / 2, 1),
+            "atual": m == (ano, mes),
+            "renda": barra(por_mes[m]["rendas"], x0),
+            "gasto": barra(por_mes[m]["gastos"], x0 + larg_barra + folga),
+        })
+    return {"largura": largura, "base_y": base_y, "rotulo_y": base_y + 22,
+            "altura_total": base_y + 32, "grupos": grupos}
+
+
 @app.get("/")
 @login_required
 def inicio():
-    return redirect(url_for("rendas"))
+    agora = hoje()
+    mes = request.args.get("mes", type=int)
+    ano = request.args.get("ano", type=int)
+    if not (mes and ano and 1 <= mes <= 12 and 1900 <= ano <= 2100):
+        ano, mes = agora.year, agora.month
+    anterior = faturas.somar_meses(ano, mes, -1)
+    seguinte = faturas.somar_meses(ano, mes, 1)
+    serie = [faturas.somar_meses(ano, mes, k) for k in range(-5, 1)]
+    de = date(serie[0][0], serie[0][1], 1)
+    ate = date(ano, mes, calendar.monthrange(ano, mes)[1])
+    uid = session["uid"]
+
+    with db.Banco() as b:
+        sql = ("SELECT {campo} AS nome, valor, data FROM {t} "
+               "WHERE usuario_id = ? AND data >= ? AND data <= ?")
+        linhas_r = b.todos(sql.format(campo="origem", t="rendas"),
+                           [uid, db.p_data(de), db.p_data(ate)])
+        linhas_g = b.todos(sql.format(campo="categoria", t="gastos"),
+                           [uid, db.p_data(de), db.p_data(ate)])
+        recentes = []
+        for tabela, tipo in (("rendas", "renda"), ("gastos", "gasto")):
+            campo = LANCAMENTOS[tabela]["campo"]
+            for r in b.todos(
+                    f"SELECT {campo} AS nome, valor, descricao, data FROM {tabela} "
+                    "WHERE usuario_id = ? "
+                    "ORDER BY (data IS NULL), data DESC, id DESC LIMIT 5", [uid]):
+                r["tipo"] = tipo
+                recentes.append(r)
+        lista_cartoes = buscar_cartoes(b)
+        compras = {c["id"]: compras_do_cartao(b, c["id"]) for c in lista_cartoes}
+
+    por_mes = {m: {"rendas": 0.0, "gastos": 0.0} for m in serie}
+    cat_atual, cat_anterior = {}, {}
+    for r in linhas_r:
+        por_mes[(r["data"].year, r["data"].month)]["rendas"] += r["valor"]
+    for g in linhas_g:
+        chave = (g["data"].year, g["data"].month)
+        por_mes[chave]["gastos"] += g["valor"]
+        if chave == (ano, mes):
+            cat_atual[g["nome"]] = cat_atual.get(g["nome"], 0.0) + g["valor"]
+        elif chave == anterior:
+            cat_anterior[g["nome"]] = cat_anterior.get(g["nome"], 0.0) + g["valor"]
+
+    total_r = round(por_mes[(ano, mes)]["rendas"], 2)
+    total_g = round(por_mes[(ano, mes)]["gastos"], 2)
+    ant_r = round(por_mes[anterior]["rendas"], 2)
+    ant_g = round(por_mes[anterior]["gastos"], 2)
+
+    categorias = [
+        {"nome": nome, "total": round(v, 2),
+         "pct": round(v / total_g * 100) if total_g else 0,
+         "var": variacao(v, cat_anterior.get(nome, 0.0))}
+        for nome, v in sorted(cat_atual.items(), key=lambda kv: -kv[1])]
+
+    recentes.sort(key=lambda r: (r["data"] or date.min), reverse=True)
+
+    cartoes_resumo = []
+    for c in lista_cartoes:
+        a, m = faturas.fatura_inicial(agora, c)
+        itens = faturas.parcelas_da_fatura(compras[c["id"]], c, a, m)
+        comprometido = faturas.limite_comprometido(compras[c["id"]], c, agora)
+        venc = faturas.vencimento_da_fatura(a, m, c)
+        cartoes_resumo.append({
+            "id": c["id"], "nome": c["nome"], "limite": c["limite"],
+            "fatura": round(sum(v for _, _, v in itens), 2),
+            "vencimento": venc, "dias": (venc - agora).days,
+            "pct": round(comprometido / c["limite"] * 100) if c["limite"] else 0,
+            "disponivel": c["limite"] - comprometido})
+
+    return render_template(
+        "inicio.html", aba="inicio", meses=MESES, mes=mes, ano=ano, hoje=agora,
+        anterior=anterior, seguinte=seguinte,
+        total_rendas=total_r, total_gastos=total_g,
+        var_rendas=variacao(total_r, ant_r), var_gastos=variacao(total_g, ant_g),
+        nome_anterior=MESES[anterior[1] - 1],
+        categorias=categorias, grafico=montar_grafico(serie, por_mes, ano, mes),
+        cartoes=cartoes_resumo, recentes=recentes[:6])
 
 
 # -----------------------------
@@ -343,37 +459,83 @@ def pagina_lancamentos(tabela):
         n_rendas=resumo["rendas"]["n"], n_gastos=resumo["gastos"]["n"])
 
 
-def adicionar_lancamento(tabela):
+def ler_lancamento(tabela, data_vazia):
+    """Valida o formulário de renda/gasto.
+
+    Devolve (campo, valor, descricao, data) ou None (o erro já foi avisado).
+    Se a data vier em branco, usa 'data_vazia'.
+    """
     cfg = LANCAMENTOS[tabela]
     campo = request.form.get(cfg["campo"], "").strip()
     descricao = request.form.get("descricao", "").strip()
     if not campo or not request.form.get("valor", "").strip():
         erro(f"Preencha {cfg['rotulo'].lower()} e o valor.")
-        return voltar(tabela)
+        return None
     if len(campo) > 80 or len(descricao) > 200:
         erro("Texto muito longo.")
-        return voltar(tabela)
+        return None
     try:
         valor = converter_valor(request.form["valor"])
     except ValueError:
         erro("Digite um valor válido, por exemplo: 2500,50.")
-        return voltar(tabela)
+        return None
     if valor <= 0:
         erro("O valor precisa ser maior que zero.")
-        return voltar(tabela)
+        return None
     try:
         data = converter_data(request.form.get("data")) \
-            if request.form.get("data", "").strip() else hoje()
+            if request.form.get("data", "").strip() else data_vazia
     except ValueError:
         erro("Data inválida.")
-        return voltar(tabela)
+        return None
+    return campo, valor, descricao, data
 
+
+def adicionar_lancamento(tabela):
+    cfg = LANCAMENTOS[tabela]
+    dados = ler_lancamento(tabela, hoje())
+    if dados is None:
+        return voltar(tabela)
+    campo, valor, descricao, data = dados
     with db.Banco() as b:
         b.executar(
             f"INSERT INTO {tabela} (usuario_id, {cfg['campo']}, valor, "
             "descricao, data) VALUES (?, ?, ?, ?, ?)",
             [session["uid"], campo, valor, descricao, db.p_data(data)])
     ok("Registro adicionado.")
+    return voltar(tabela)
+
+
+def buscar_lancamento(tabela, id):
+    with db.Banco() as b:
+        registro = b.um(f"SELECT * FROM {tabela} WHERE usuario_id = ? AND id = ?",
+                        [session["uid"], id])
+    if not registro:
+        abort(404)
+    return registro
+
+
+def pagina_editar(tabela, id):
+    registro = buscar_lancamento(tabela, id)
+    return render_template(
+        "editar.html", aba=tabela, endpoint=tabela, cfg=LANCAMENTOS[tabela],
+        registro=registro, filtro=ler_filtro(), categorias=CATEGORIAS)
+
+
+def salvar_edicao(tabela, id):
+    cfg = LANCAMENTOS[tabela]
+    buscar_lancamento(tabela, id)  # 404 se não existir ou for de outro usuário
+    # Data em branco = registro sem data (como as rendas antigas importadas).
+    dados = ler_lancamento(tabela, None)
+    if dados is None:
+        return voltar(tabela + "_editar", url_args={"id": id})
+    campo, valor, descricao, data = dados
+    with db.Banco() as b:
+        b.executar(
+            f"UPDATE {tabela} SET {cfg['campo']} = ?, valor = ?, descricao = ?, "
+            "data = ? WHERE usuario_id = ? AND id = ?",
+            [campo, valor, descricao, db.p_data(data), session["uid"], id])
+    ok("Registro atualizado.")
     return voltar(tabela)
 
 
@@ -409,6 +571,18 @@ def rendas_remover():
     return remover_lancamentos("rendas")
 
 
+@app.get("/rendas/<int:id>/editar")
+@login_required
+def rendas_editar(id):
+    return pagina_editar("rendas", id)
+
+
+@app.post("/rendas/<int:id>/editar")
+@login_required
+def rendas_editar_salvar(id):
+    return salvar_edicao("rendas", id)
+
+
 @app.get("/gastos")
 @login_required
 def gastos():
@@ -425,6 +599,18 @@ def gastos_adicionar():
 @login_required
 def gastos_remover():
     return remover_lancamentos("gastos")
+
+
+@app.get("/gastos/<int:id>/editar")
+@login_required
+def gastos_editar(id):
+    return pagina_editar("gastos", id)
+
+
+@app.post("/gastos/<int:id>/editar")
+@login_required
+def gastos_editar_salvar(id):
+    return salvar_edicao("gastos", id)
 
 
 # -----------------------------
