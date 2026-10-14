@@ -134,7 +134,7 @@
       <thead>
         <tr>
           <th class="chk"><input type="checkbox" data-select-all aria-label="Selecionar todos"></th>
-          <th>Data</th><th>{{ cfg.coluna|capitalize }}</th><th class="dir">Valor</th><th>Descrição</th>
+          <th>Data</th><th>{{ cfg.coluna|capitalize }}</th><th class="dir">Valor</th><th>Descrição</th><th class="acao"><span class="so-leitor">Ações</span></th>
         </tr>
       </thead>
       <tbody>
@@ -147,9 +147,13 @@
             {{ '+' if endpoint == 'rendas' else '−' }} {{ r.valor|moeda }}
           </td>
           <td data-label="Descrição" class="desc">{{ r.descricao or '-' }}</td>
+          <td class="acao">
+            <a class="btn-icone-link" href="{{ url_for(endpoint + '_editar', id=r.id, **filtro.params) }}"
+               title="Editar" aria-label="Editar registro">{{ ico('edit') }}<span class="so-mobile">Editar</span></a>
+          </td>
         </tr>
         {% else %}
-        <tr class="linha-vazia"><td colspan="5">
+        <tr class="linha-vazia"><td colspan="6">
           <div class="vazio">
             {{ ico('inbox', 'ico-grande') }}
             <strong>Nenhum registro neste período</strong>
