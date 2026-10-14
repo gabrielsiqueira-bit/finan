@@ -21,6 +21,10 @@
 
     {% set fp = filtro.params if filtro is defined else {} %}
     <nav class="menu" aria-label="Seções">
+      <a class="menu-item {{ 'ativo' if aba == 'inicio' }}" href="{{ url_for('inicio') }}"
+         {% if aba == 'inicio' %}aria-current="page"{% endif %}>
+        {{ ico('grid') }}<span>Visão geral</span>
+      </a>
       <a class="menu-item {{ 'ativo' if aba == 'rendas' }}" href="{{ url_for('rendas', **fp) }}"
          {% if aba == 'rendas' %}aria-current="page"{% endif %}>
         {{ ico('up') }}<span>Rendas</span>
