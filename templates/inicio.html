@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% from "_macros.html" import ico, variacao %}
+{% block title %}Visão geral{% endblock %}
+{% block titulo %}Visão geral{% endblock %}
+{% block subtitulo %}{{ meses[mes - 1] }} de {{ ano }}{% endblock %}
+{% block acoes_pagina %}
+  <div class="nav-mes">
+    <a class="btn btn-secundario btn-quadrado" href="{{ url_for('inicio', mes=anterior[1], ano=anterior[0]) }}"
+       aria-label="Mês anterior" title="Mês anterior">{{ ico('esq') }}</a>
+    <a class="btn btn-secundario" href="{{ url_for('inicio', mes=hoje.month, ano=hoje.year) }}">Mês atual</a>
+    <a class="btn btn-secundario btn-quadrado" href="{{ url_for('inicio', mes=seguinte[1], ano=seguinte[0]) }}"
+       aria-label="Próximo mês" title="Próximo mês">{{ ico('dir') }}</a>
+  </div>
+{% endblock %}
+
+{% block content %}
+{% set saldo = total_rendas - total_gastos %}
+{% if total_rendas > 0 %}
+  {% set pct = (total_gastos / total_rendas * 100)|round|int %}
+{% else %}
+  {% set pct = 100 if total_gastos > 0 else 0 %}
+{% endif %}
+{% set barra = 'ok' if pct <= 70 else ('atencao' if pct <= 100 else 'estourou') %}
+
+<section class="resumo card" aria-label="Resumo do mês">
+  <div class="resumo-saldo">
+    <span class="rotulo">Saldo de {{ meses[mes - 1] }}</span>
+    <strong class="saldo num {{ 'positivo' if saldo >= 0 else 'negativo' }}">{{ saldo|moeda }}</strong>
+    <progress class="barra {{ barra }}" max="100" value="{{ [pct, 100]|min }}"
+              aria-label="Gastos em relação às rendas"></progress>
+    <span class="legenda">
+      {% if total_rendas > 0 %}
+        Os gastos equivalem a {{ pct }}% das rendas.
+      {% elif total_gastos > 0 %}
+        Há gastos neste mês e nenhuma renda registrada.
+      {% else %}
+        Nenhum lançamento neste mês.
+      {% endif %}
+    </span>
+  </div>
+
+  <div class="resumo-lados">
+    <div class="resumo-item">
+      <span class="selo-ico positivo-bg">{{ ico('up') }}</span>
+      <div>
+        <span class="rotulo">Rendas</span>
+        <strong class="num positivo">{{ total_rendas|moeda }}</strong>
+        {{ variacao(var_rendas, nome_anterior, true) }}
+      </div>
+    </div>
+    <div class="resumo-item">
+      <span class="selo-ico negativo-bg">{{ ico('down') }}</span>
+      <div>
+        <span class="rotulo">Gastos</span>
+        <strong class="num negativo">{{ total_gastos|moeda }}</strong>
+        {{ variacao(var_gastos, nome_anterior, false) }}
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="grade-2">
+  <section class="card">
+    <h2 class="card-titulo">Gastos por categoria</h2>
+    {% if categorias %}
+    <ul class="cat-lista">
+      {% for c in categorias %}
+      <li>
+        <div class="cat-linha">
+          <span class="cat-nome">{{ c.nome }}</span>
+          <span class="num cat-valor">{{ c.total|moeda }}</span>
+        </div>
+        <progress class="barra fina neutra" max="100" value="{{ c.pct }}" aria-label="{{ c.pct }}% dos gastos"></progress>
+        <span class="legenda">
+          {{ c.pct }}% dos gastos
+          {%- if c.var is not none and c.var != 0 %}, {{ c.var|abs }}% {{ 'a mais' if c.var > 0 else 'a menos' }} que em {{ nome_anterior }}{% endif %}
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="vazio">
+      {{ ico('inbox', 'ico-grande') }}
+      <strong>Nenhum gasto em {{ meses[mes - 1] }}</strong>
+      <span>Quando você registrar gastos, eles aparecem aqui agrupados por categoria.</span>
+      <a class="btn btn-secundario" href="{{ url_for('gastos') }}">{{ ico('plus') }}Registrar gasto</a>
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2 class="card-titulo">Rendas e gastos nos últimos 6 meses</h2>
+    <svg class="grafico" viewBox="0 0 {{ grafico.largura }} {{ grafico.altura_total }}" role="img"
+         aria-label="Gráfico de barras com rendas e gastos mensais dos últimos seis meses">
+      <line class="grafico-base" x1="0" x2="{{ grafico.largura }}" y1="{{ grafico.base_y }}" y2="{{ grafico.base_y }}"/>
+      {% for g in grafico.grupos %}
+      <g class="{{ 'grupo' if g.atual else 'grupo apagado' }}">
+        <rect class="g-renda" x="{{ g.renda.x }}" y="{{ g.renda.y }}" width="{{ g.renda.w }}" height="{{ g.renda.h }}" rx="5">
+          <title>Rendas em {{ g.rotulo }}: {{ g.renda.valor|moeda }}</title>
+        </rect>
+        <rect class="g-gasto" x="{{ g.gasto.x }}" y="{{ g.gasto.y }}" width="{{ g.gasto.w }}" height="{{ g.gasto.h }}" rx="5">
+          <title>Gastos em {{ g.rotulo }}: {{ g.gasto.valor|moeda }}</title>
+        </rect>
+        <text class="grafico-rotulo {{ 'forte' if g.atual }}" x="{{ g.centro }}" y="{{ grafico.rotulo_y }}" text-anchor="middle">{{ g.rotulo }}</text>
+      </g>
+      {% endfor %}
+    </svg>
+    <div class="chaves">
+      <span class="chave"><i class="chave-cor c-renda"></i>Rendas</span>
+      <span class="chave"><i class="chave-cor c-gasto"></i>Gastos</span>
+    </div>
+  </section>
+</div>
+
+<div class="grade-2">
+  <section class="card">
+    <div class="painel-linha">
+      <h2 class="card-titulo">Cartões</h2>
+      <a class="link-discreto" href="{{ url_for('cartoes') }}">Ver faturas</a>
+    </div>
+    {% if cartoes %}
+    <ul class="lista-linhas">
+      {% for c in cartoes %}
+      {% set b = 'ok' if c.pct <= 70 else ('atencao' if c.pct <= 100 else 'estourou') %}
+      <li>
+        <div class="cat-linha">
+          <a class="cat-nome" href="{{ url_for('cartoes', cartao=c.id) }}">{{ c.nome }}</a>
+          <span class="num cat-valor negativo">{{ c.fatura|moeda }}</span>
+        </div>
+        <progress class="barra fina {{ b }}" max="100" value="{{ [c.pct, 100]|min }}" aria-label="{{ c.pct }}% do limite"></progress>
+        <span class="legenda">
+          Fatura atual vence em {{ c.vencimento|br }}
+          {%- if c.dias < 0 %} (venceu há {{ -c.dias }} dia{{ 's' if c.dias != -1 }})
+          {%- elif c.dias == 0 %} (hoje)
+          {%- else %} (em {{ c.dias }} dia{{ 's' if c.dias != 1 }}){% endif %}.
+          {{ c.pct }}% do limite usado, {{ c.disponivel|moeda }} disponível.
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="vazio">
+      {{ ico('card', 'ico-grande') }}
+      <strong>Nenhum cartão cadastrado</strong>
+      <span>Cadastre um cartão para acompanhar fatura, vencimento e limite aqui.</span>
+      <a class="btn btn-secundario" href="{{ url_for('cartoes_gerenciar') }}">{{ ico('plus') }}Cadastrar cartão</a>
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2 class="card-titulo">Últimos lançamentos</h2>
+    {% if recentes %}
+    <ul class="lista-linhas recentes">
+      {% for r in recentes %}
+      <li class="recente">
+        <span class="selo-ico pequeno {{ 'positivo-bg' if r.tipo == 'renda' else 'negativo-bg' }}">{{ ico('up' if r.tipo == 'renda' else 'down') }}</span>
+        <div class="recente-texto">
+          <strong>{{ r.nome }}</strong>
+          <span class="legenda">{{ r.data|br }}{% if r.descricao %}: {{ r.descricao }}{% endif %}</span>
+        </div>
+        <span class="num valor {{ 'positivo' if r.tipo == 'renda' else 'negativo' }}">{{ '+' if r.tipo == 'renda' else '−' }} {{ r.valor|moeda }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    <div class="filtro-rodape">
+      <a class="link-discreto" href="{{ url_for('rendas') }}">Ver todas as rendas</a>
+      <a class="link-discreto" href="{{ url_for('gastos') }}">Ver todos os gastos</a>
+    </div>
+    {% else %}
+    <div class="vazio">
+      {{ ico('inbox', 'ico-grande') }}
+      <strong>Nada registrado ainda</strong>
+      <span>Comece adicionando uma renda ou um gasto.</span>
+      <a class="btn btn-primario" href="{{ url_for('rendas') }}">{{ ico('plus') }}Registrar renda</a>
+    </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
