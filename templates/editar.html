@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "_macros.html" import ico %}
+{% block title %}Editar {{ 'renda' if endpoint == 'rendas' else 'gasto' }}{% endblock %}
+{% block titulo %}Editar {{ 'renda' if endpoint == 'rendas' else 'gasto' }}{% endblock %}
+{% block subtitulo %}Altere os dados e salve. O registro continua no mesmo lugar da lista.{% endblock %}
+{% block acoes_pagina %}
+  <a class="btn btn-secundario" href="{{ url_for(endpoint, **filtro.params) }}">{{ ico('back') }}Voltar para {{ cfg.titulo|lower }}</a>
+{% endblock %}
+
+{% block content %}
+<section class="card card-edicao">
+  <form method="post" action="{{ url_for(endpoint + '_editar_salvar', id=registro.id) }}" class="form-edicao">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="qs" value="{{ request.query_string.decode() }}">
+
+    <label>{{ cfg.rotulo }}
+      <input name="{{ cfg.campo }}" required maxlength="80" value="{{ registro[cfg.campo] }}"
+             {% if endpoint == 'gastos' %}list="categorias" autocomplete="off"{% endif %}>
+    </label>
+    {% if endpoint == 'gastos' %}
+    <datalist id="categorias">
+      {% for c in categorias %}<option value="{{ c }}">{% endfor %}
+    </datalist>
+    {% endif %}
+
+    <div class="duas-colunas">
+      <label>Valor (R$)
+        <input name="valor" required inputmode="decimal" value="{{ registro.valor|valor_campo }}">
+      </label>
+      <label>Data
+        <input type="date" name="data" value="{{ registro.data.isoformat() if registro.data }}">
+        {% if not registro.data %}<span class="dica">Este registro está sem data. Preencha para incluí-lo nos filtros por período.</span>{% endif %}
+      </label>
+    </div>
+
+    <label><span>Descrição <span class="opcional">(opcional)</span></span>
+      <input name="descricao" maxlength="200" value="{{ registro.descricao }}">
+    </label>
+
+    <div class="form-acoes">
+      <a class="btn btn-fantasma" href="{{ url_for(endpoint, **filtro.params) }}">Cancelar</a>
+      <button class="btn btn-primario" type="submit">Salvar alterações</button>
+    </div>
+  </form>
+</section>
+{% endblock %}
